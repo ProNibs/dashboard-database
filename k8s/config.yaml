@@ -1,0 +1,59 @@
+#@ load("@ytt:data", "data")
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: #@ data.values.appName + "-svc"
+  namespace: #@ data.values.namespace
+spec:
+  selector:
+    app: #@ data.values.appName
+  ports:
+  - port: 5432
+    targetPort: #@ data.values.containerPort
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: #@ data.values.appName + "-statefulset"
+  namespace: #@ data.values.namespace
+spec:
+  selector:
+    matchLabels:
+      app: #@ data.values.appName
+  serviceName: #@ data.values.appName + "-svc"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: #@ data.values.appName
+    spec:
+      containers:
+      - name: #@ data.values.appName
+        image: #@ "{}/{}:{}".format(data.values.repoName, data.values.imageName, data.values.tag)
+        imagePullPolicy: Always
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        env:
+          #@ for env in data.values.env:
+          - name: #@ env.name
+            value: #@ env.value
+          #@ end
+        ports:
+        - containerPort: #@ data.values.containerPort
+          name: web
+        volumeMounts:
+        - name: www
+          mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+  - metadata:
+      name: www
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
